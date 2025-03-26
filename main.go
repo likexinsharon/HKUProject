@@ -1,10 +1,10 @@
 package main
 
 import (
-    "encoding/json"
-    "fmt"
-    "log"
-    "net/http"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
 )
 
 // 定义请求/响应用的结构体
@@ -26,7 +26,10 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Bad request", http.StatusBadRequest)
         return
     }
-
+    err = connectDB()
+    if err != nil {
+        http.Error(w, "Cannot Connect to DB", http.StatusBadRequest)
+    }
     // 构造响应
     response := map[string]string{
         "message": fmt.Sprintf("Hello, %s!", msg.Name),
