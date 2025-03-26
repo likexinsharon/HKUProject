@@ -39,6 +39,6 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
     http.HandleFunc("/api/hello", helloHandler)
 
-    fmt.Println("Server is running at http://localhost:8080")
-    log.Fatal(http.ListenAndServe(":8080", nil))
+    fmt.Println("Server is running at http://localhost:80")
+    log.Fatal(http.ListenAndServe(":80", nil))
 }
