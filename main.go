@@ -40,5 +40,5 @@ func main() {
     http.HandleFunc("/api/hello", helloHandler)
 
     fmt.Println("Server is running at http://localhost:80")
-    log.Fatal(http.ListenAndServe(":80", nil))
+    log.Fatal(http.ListenAndServe("0.0.0.0:80", nil))
 }
