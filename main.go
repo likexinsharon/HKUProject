@@ -72,9 +72,9 @@ func main() {
 	err := connectDB()
 	println("end")
 	if err != nil {
-		log.Fatalf("连接数据库失败: %v", err)
+		log.Fatalf("db conncetion failed: %v", err)
 	}
-	fmt.Println("数据库连接成功")
+	fmt.Println("db connection succ")
 
 	// 初始化测试数据
 	initTestData()
@@ -89,6 +89,6 @@ func main() {
 	http.HandleFunc("/api/user/logout", loggingMiddleware(corsMiddleware(logoutHandler)))
 	http.HandleFunc("/api/user/verify-token", loggingMiddleware(corsMiddleware(verifyTokenHandler)))
 
-	fmt.Println("服务器正在运行于 127.0.0.1:80")
-	log.Fatal(http.ListenAndServe("127.0.0.1:80", nil))
+	fmt.Println("service is running")
+	log.Fatal(http.ListenAndServe("0.0.0.0:80", nil))
 }
