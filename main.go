@@ -40,7 +40,11 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-    http.HandleFunc("/api/hello", helloHandler)
+    err := connectDB()
+    if err != nil {
+        panic(err)
+    }
+	http.HandleFunc("/api/hello", helloHandler)
 
     fmt.Println("Server is running")
     log.Fatal(http.ListenAndServe("0.0.0.0:80", nil))
