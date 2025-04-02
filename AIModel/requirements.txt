@@ -1,0 +1,6 @@
+transformers==4.35.2 
+peft==0.4.0 
+datasets==2.10.1 
+accelerate==0.20.3 
+tiktoken
+transformers_stream_generator
