@@ -26,10 +26,7 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Bad request", http.StatusBadRequest)
         return
     }
-    err = connectDB()
-    if err != nil {
-        http.Error(w, "Cannot Connect to DB", http.StatusBadRequest)
-    }
+   
     // 构造响应
     response := map[string]string{
         "message": fmt.Sprintf("Hello, %s!", msg.Name),
@@ -44,7 +41,7 @@ func main() {
     if err != nil {
         panic(err)
     }
-	http.HandleFunc("/api/hello", helloHandler)
+    http.HandleFunc("/api/hello", helloHandler)
 
     fmt.Println("Server is running")
     log.Fatal(http.ListenAndServe("0.0.0.0:80", nil))
