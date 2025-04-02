@@ -17,8 +17,8 @@ var db *sql.DB
 func connectDB() error {
 	var err error
 	// 修正数据库连接字符串格式
-
-	db, err := sql.Open("mysql", "root:hkuproject2025!@/rm-bp1j0x5f9je2tr4fh.mysql.rds.aliyuncs.com")
+	db, err = sql.Open("mysql", "root:hkuproject2025!@tcp(rm-bp1j0x5f9je2tr4fh.mysql.rds.aliyuncs.com:3306)/hkuproject")
+	// db, err = sql.Open("mysql", "root:hkuproject2025!@rm-bp1j0x5f9je2tr4fh.mysql.rds.aliyuncs.com/hkuproject")
 	if err != nil {
 		return err
 	}
@@ -26,36 +26,33 @@ func connectDB() error {
 	db.SetConnMaxLifetime(time.Minute * 3)
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(10)
-
-	// 测试连接
-	if err := db.Ping(); err != nil {
-		return fmt.Errorf("数据库连接失败: %w", err)
-	}
-
 	fmt.Println("数据库连接成功")
 
-	// 创建用户表
-	if err := createUserTable(); err != nil {
-		return err
-	}
+	// // 创建用户表
+	// if err := createUserTable(); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
 
-func createUserTable() error {
-	query := `CREATE TABLE IF NOT EXISTS users (
-		id INT AUTO_INCREMENT PRIMARY KEY,
-		username VARCHAR(50) NOT NULL UNIQUE,
-		password VARCHAR(255) NOT NULL,
-		email VARCHAR(100) NOT NULL UNIQUE,
-		account_level VARCHAR(20) DEFAULT 'standard',
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+// func createUserTable() error {
+// 	query := `CREATE TABLE IF NOT EXISTS users (
+// 		id INT AUTO_INCREMENT PRIMARY KEY,
+// 		username VARCHAR(50) NOT NULL UNIQUE,
+// 		password VARCHAR(255) NOT NULL,
+// 		email VARCHAR(100) NOT NULL UNIQUE,
+// 		account_level VARCHAR(20) DEFAULT 'standard',
+// 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+// 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+// 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
 
-	_, err := db.Exec(query)
-	return err
-}
+// 	_, err := db.Exec(query)
+// 	if err != nil {
+// 		fmt.Println("execute create sql failed")
+// 	}
+// 	return err
+// }
 
 // 检查用户名是否已存在
 func isUsernameExists(username string) (bool, error) {
