@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
+	"strconv"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -17,7 +19,8 @@ var db *sql.DB
 func connectDB() error {
 	var err error
 	// 修正数据库连接字符串格式
-	db, err = sql.Open("mysql", "root:hkuproject2025!@tcp(rm-bp1j0x5f9je2tr4fh.mysql.rds.aliyuncs.com:3306)/hkuproject")
+
+	db, err := sql.Open("mysql", "root:hkuproject2025!@/rm-bp1j0x5f9je2tr4fh.mysql.rds.aliyuncs.com")
 	if err != nil {
 		return err
 	}
@@ -25,7 +28,91 @@ func connectDB() error {
 	db.SetConnMaxLifetime(time.Minute * 3)
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(10)
-	fmt.Println("db conncetion succ")
+
+	// 测试连接
+	if err := db.Ping(); err != nil {
+		return fmt.Errorf("数据库连接失败: %w", err)
+	}
+
+	fmt.Println("数据库连接成功")
+
+	// 创建用户表
+	if err := createUserTable(); err != nil {
+		return err
+	}
+
+	// 创建钱包表
+	if err := createWalletTables(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createUserTable() error {
+	query := `CREATE TABLE IF NOT EXISTS users (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		username VARCHAR(50) NOT NULL UNIQUE,
+		password VARCHAR(255) NOT NULL,
+		email VARCHAR(100) NOT NULL UNIQUE,
+		account_level VARCHAR(20) DEFAULT 'standard',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+
+	_, err := db.Exec(query)
+	return err
+}
+
+// 创建钱包表结构
+func createWalletTables() error {
+	// 用户资产表
+	assetQuery := `CREATE TABLE IF NOT EXISTS user_assets (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		user_id INT NOT NULL,
+		asset_name VARCHAR(50) NOT NULL,
+		symbol VARCHAR(20) NOT NULL,
+		quantity DECIMAL(36,18) NOT NULL DEFAULT 0,
+		on_order_quantity DECIMAL(36,18) NOT NULL DEFAULT 0,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		INDEX idx_user_id (user_id),
+		INDEX idx_symbol (symbol),
+		UNIQUE KEY unique_user_asset (user_id, symbol)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+
+	// 市场价格表
+	priceQuery := `CREATE TABLE IF NOT EXISTS asset_prices (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		symbol VARCHAR(20) NOT NULL,
+		price DECIMAL(36,18) NOT NULL,
+		change_24h DECIMAL(10,2) NOT NULL,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		UNIQUE KEY unique_symbol (symbol)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+
+	// 用户设置表
+	settingsQuery := `CREATE TABLE IF NOT EXISTS user_settings (
+		user_id INT PRIMARY KEY,
+		username VARCHAR(50) NOT NULL,
+		email VARCHAR(100) NOT NULL,
+		account_level VARCHAR(20) DEFAULT 'standard',
+		join_date DATE NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+
+	// 执行创建表操作
+	if _, err := db.Exec(assetQuery); err != nil {
+		return fmt.Errorf("创建用户资产表失败: %w", err)
+	}
+
+	if _, err := db.Exec(priceQuery); err != nil {
+		return fmt.Errorf("创建资产价格表失败: %w", err)
+	}
+
+	if _, err := db.Exec(settingsQuery); err != nil {
+		return fmt.Errorf("创建用户设置表失败: %w", err)
+	}
 
 	return nil
 }
@@ -59,7 +146,7 @@ func getUserByEmail(email string) (User, error) {
 		email).Scan(&user.ID, &user.Username, &user.Password, &user.Email, &user.AccountLevel)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return User{}, fmt.Errorf("email not registered")
+			return User{}, fmt.Errorf("邮箱未注册")
 		}
 		return User{}, err
 	}
@@ -77,6 +164,219 @@ func createUser(user User) (int64, error) {
 	}
 
 	return result.LastInsertId()
+}
+
+// GetUserSettingsFromDB 从数据库获取用户设置信息
+func GetUserSettingsFromDB(userID string) (UserSettings, error) {
+	var settings UserSettings
+	var joinDate string
+
+	// 连接检查
+	if db == nil {
+		return settings, fmt.Errorf("数据库连接未初始化")
+	}
+
+	// 查询用户设置信息
+	query := `
+		SELECT us.user_id, us.username, us.email, us.account_level, us.join_date 
+		FROM user_settings us
+		JOIN users u ON us.user_id = u.id
+		WHERE u.id = ?`
+
+	err := db.QueryRow(query, userID).Scan(
+		&settings.UserID,
+		&settings.Username,
+		&settings.Email,
+		&settings.AccountLevel,
+		&joinDate,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return settings, fmt.Errorf("用户ID不存在")
+		}
+		return settings, fmt.Errorf("查询用户设置失败: %w", err)
+	}
+
+	// 格式化日期
+	settings.JoinDate = joinDate
+
+	// 计算用户余额
+	balance, err := GetUserTotalBalance(userID)
+	if err != nil {
+		return settings, fmt.Errorf("计算用户余额失败: %w", err)
+	}
+
+	settings.Balance = balance
+
+	return settings, nil
+}
+
+// GetUserTotalBalance 计算用户所有资产的总价值
+func GetUserTotalBalance(userID string) (float64, error) {
+	var totalBalance float64
+// todo ：多个历史模拟交易（需要做）
+	query := `
+		SELECT SUM(ua.quantity * ap.price) + SUM(ua.on_order_quantity * ap.price) as total_balance
+		FROM user_assets ua
+		JOIN asset_prices ap ON ua.symbol = ap.symbol
+		WHERE ua.user_id = ?`
+
+	err := db.QueryRow(query, userID).Scan(&totalBalance)
+	if err != nil {
+		return 0, err
+	}
+
+	return totalBalance, nil
+}
+
+// GetUserWalletAssets 获取用户钱包的资产信息
+func GetUserWalletAssets(userID string) (WalletInfo, error) {
+	var walletInfo WalletInfo
+	var err error
+
+	// 连接检查
+	if db == nil {
+		return walletInfo, fmt.Errorf("数据库连接未初始化")
+	}
+
+	// 设置用户ID
+	id, err := strconv.Atoi(userID)
+	if err != nil {
+		return walletInfo, fmt.Errorf("无效的用户ID格式")
+	}
+	walletInfo.UserID = id
+
+	// 获取总余额
+	balance, err := GetUserTotalBalance(userID)
+	if err != nil {
+		return walletInfo, fmt.Errorf("计算用户余额失败: %w", err)
+	}
+	walletInfo.Balance = balance
+
+	// 查询用户资产列表  【表结构待确认】
+	query := `
+		SELECT ua.asset_name, 
+		       ua.symbol, 
+		       CONCAT(IF(ap.change_24h >= 0, '+', ''), 
+		              CAST(ap.change_24h AS CHAR), 
+		              '%') AS market_24h,
+		       ua.quantity, 
+		       ua.quantity * ap.price AS current_value,
+		       ua.on_order_quantity, 
+		       ua.on_order_quantity * ap.price AS on_order_value
+		FROM user_assets ua
+		FORCE INDEX (idx_user_id)
+		INNER JOIN asset_prices ap 
+		    ON ua.symbol = ap.symbol AND ap.symbol IN (
+		        SELECT DISTINCT symbol FROM user_assets 
+		        WHERE user_id = ?
+		    )
+		WHERE ua.user_id = ?
+		ORDER BY current_value DESC
+		LIMIT 50;`
+
+	rows, err := db.Query(query, userID, userID)
+	if err != nil {
+		return walletInfo, fmt.Errorf("查询用户资产失败: %w", err)
+	}
+	defer rows.Close()
+
+	// 处理查询结果
+	var assets []WalletAsset
+	for rows.Next() {
+		var asset WalletAsset
+		err := rows.Scan(
+			&asset.Name,
+			&asset.Symbol,
+			&asset.Market24h,
+			&asset.CurQuantity,
+			&asset.CurValue,
+			&asset.OnOrderQuantity,
+			&asset.OnOrderValue,
+		)
+		if err != nil {
+			return walletInfo, fmt.Errorf("处理资产数据失败: %w", err)
+		}
+		assets = append(assets, asset)
+	}
+
+	if err := rows.Err(); err != nil {
+		return walletInfo, fmt.Errorf("迭代资产数据失败: %w", err)
+	}
+
+	walletInfo.Assets = assets
+
+	return walletInfo, nil
+}
+
+// 初始化钱包测试数据
+func initWalletTestData() error {
+	// 先检查表是否已创建
+	if err := createWalletTables(); err != nil {
+		return err
+	}
+
+	// 添加测试用户设置
+	userSettingsQuery := `
+		INSERT IGNORE INTO user_settings (user_id, username, email, account_level, join_date)
+		VALUES 
+			(12345, 'testuser', 'test@example.com', 'standard', '2020-10-20'),
+			(12345678, 'premium', 'premium@example.com', 'vip', '2019-05-15')`
+
+	// 添加测试资产价格
+	pricesQuery := `
+		INSERT IGNORE INTO asset_prices (symbol, price, change_24h)
+		VALUES 
+			('BTC', 50000, 2.05),
+			('ETH', 3000, -2.05),
+			('BNB', 350, 1.23),
+			('SOL', 80, 5.67)`
+
+	// 添加测试用户资产
+	assetsQuery := `
+		INSERT IGNORE INTO user_assets (user_id, asset_name, symbol, quantity, on_order_quantity)
+		VALUES 
+			(12345, 'Bitcoin', 'BTC', 2, 0.00674),
+			(12345, 'Ethereum', 'ETH', 33.33, 1.179),
+			(12345678, 'Bitcoin', 'BTC', 5.5, 0.1),
+			(12345678, 'Ethereum', 'ETH', 75, 2.5),
+			(12345678, 'Binance Coin', 'BNB', 100, 10)`
+
+	// 执行SQL
+	if _, err := db.Exec(userSettingsQuery); err != nil {
+		return fmt.Errorf("初始化用户设置数据失败: %w", err)
+	}
+
+	if _, err := db.Exec(pricesQuery); err != nil {
+		return fmt.Errorf("初始化资产价格数据失败: %w", err)
+	}
+
+	if _, err := db.Exec(assetsQuery); err != nil {
+		return fmt.Errorf("初始化用户资产数据失败: %w", err)
+	}
+
+	return nil
+}
+
+// ValidateUserExists 验证用户ID是否存在
+func ValidateUserExists(userID string) (bool, error) {
+	var exists bool
+	query := "SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)"
+	err := db.QueryRow(query, userID).Scan(&exists)
+	return exists, err
+}
+
+// initTestData 函数更新
+func initTestData() {
+	// 现有测试数据初始化代码...
+
+	// 初始化钱包测试数据
+	if err := initWalletTestData(); err != nil {
+		log.Printf("初始化钱包测试数据失败: %v", err)
+	} else {
+		fmt.Println("钱包测试数据初始化成功")
+	}
 }
 
 func isUsernameExistsMock(username string) (bool, error) {
