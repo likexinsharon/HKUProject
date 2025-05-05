@@ -6,8 +6,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/gorilla/mux"
 )
 
 // 定义请求/响应用的结构体
@@ -68,17 +66,17 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func GetUserSettings(w http.ResponseWriter, r *http.Request) {
-	// 用户设置处理逻辑
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("用户设置已获取"))
-}
+// func GetUserSettings(w http.ResponseWriter, r *http.Request) {
+// 	// 用户设置处理逻辑
+// 	w.WriteHeader(http.StatusOK)
+// 	w.Write([]byte("用户设置已获取"))
+// }
 
-func GetWalletAssetInfo(w http.ResponseWriter, r *http.Request) {
-	// 钱包资产信息处理逻辑
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("钱包资产信息已获取"))
-}
+// func GetWalletAssetInfo(w http.ResponseWriter, r *http.Request) {
+// 	// 钱包资产信息处理逻辑
+// 	w.WriteHeader(http.StatusOK)
+// 	w.Write([]byte("钱包资产信息已获取"))
+// }
 
 func main() {
 	// 连接数据库
@@ -92,23 +90,22 @@ func main() {
 	// 初始化测试数据
 	initTestData()
 
-	r := mux.NewRouter()
-
 	// 注册原有路由
-	r.HandleFunc("/api/hello", loggingMiddleware(corsMiddleware(helloHandler)))
+	http.HandleFunc("/api/hello", loggingMiddleware(corsMiddleware(helloHandler)))
 
 	// 用户接口路由
-	userRouter := r.PathPrefix("/api/user").Subrouter()
 
 	// 注册用户认证相关路由
-	userRouter.HandleFunc("/login", loggingMiddleware(corsMiddleware(loginHandler))).Methods("POST")
-	userRouter.HandleFunc("/register", loggingMiddleware(corsMiddleware(registerHandler))).Methods("POST")
-	userRouter.HandleFunc("/reset-password", loggingMiddleware(corsMiddleware(resetPasswordHandler))).Methods("POST")
-	userRouter.HandleFunc("/logout", loggingMiddleware(corsMiddleware(logoutHandler))).Methods("POST")
-	userRouter.HandleFunc("/verify-token", loggingMiddleware(corsMiddleware(verifyTokenHandler))).Methods("POST")
-	userRouter.HandleFunc("/wallet/settings", GetUserSettings).Methods("POST")
-	userRouter.HandleFunc("/wallet/assets", GetWalletAssetInfo).Methods("POST")
+	http.HandleFunc("/api/user/login", loggingMiddleware(corsMiddleware(loginHandler)))
+	http.HandleFunc("/api/user/register", loggingMiddleware(corsMiddleware(registerHandler)))
+	http.HandleFunc("/api/user/reset-password", loggingMiddleware(corsMiddleware(resetPasswordHandler)))
+	http.HandleFunc("/api/user/logout", loggingMiddleware(corsMiddleware(logoutHandler)))
+	http.HandleFunc("/api/user/verify-token", loggingMiddleware(corsMiddleware(verifyTokenHandler)))
 
+	// http.HandleFunc("/wallet/settings", GetUserSettings).Methods("POST")
+	// http.HandleFunc("/wallet/assets", GetWalletAssetInfo).Methods("POST")
+	fmt.Println("service is running")
+
+	log.Fatal(http.ListenAndServe("0.0.0.0:80", nil))
 	fmt.Println("服务器正在运行于 :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
 }

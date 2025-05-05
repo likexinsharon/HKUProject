@@ -391,7 +391,7 @@ func sendErrorResponse(w http.ResponseWriter, status int, message string, except
 }
 
 // 确保初始化测试数据函数在这里定义
-func initTestData() {
+func initUserTestData() {
 	// 检查是否已有测试用户
 	exists, _ := isUsernameExists("testuser")
 	if !exists {

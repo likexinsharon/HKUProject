@@ -20,7 +20,7 @@ func connectDB() error {
 	var err error
 	// 修正数据库连接字符串格式
 
-	db, err := sql.Open("mysql", "root:hkuproject2025!@/rm-bp1j0x5f9je2tr4fh.mysql.rds.aliyuncs.com")
+	db, err = sql.Open("mysql", "root:hkuproject2025!@tcp(rm-bp1j0x5f9je2tr4fh.mysql.rds.aliyuncs.com:3306)/hkuproject")
 	if err != nil {
 		return err
 	}
@@ -28,92 +28,7 @@ func connectDB() error {
 	db.SetConnMaxLifetime(time.Minute * 3)
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(10)
-
-	// 测试连接
-	if err := db.Ping(); err != nil {
-		return fmt.Errorf("数据库连接失败: %w", err)
-	}
-
-	fmt.Println("数据库连接成功")
-
-	// 创建用户表
-	if err := createUserTable(); err != nil {
-		return err
-	}
-
-	// 创建钱包表
-	if err := createWalletTables(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func createUserTable() error {
-	query := `CREATE TABLE IF NOT EXISTS users (
-		id INT AUTO_INCREMENT PRIMARY KEY,
-		username VARCHAR(50) NOT NULL UNIQUE,
-		password VARCHAR(255) NOT NULL,
-		email VARCHAR(100) NOT NULL UNIQUE,
-		account_level VARCHAR(20) DEFAULT 'standard',
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
-
-	_, err := db.Exec(query)
-	return err
-}
-
-// 创建钱包表结构
-func createWalletTables() error {
-	// 用户资产表
-	assetQuery := `CREATE TABLE IF NOT EXISTS user_assets (
-		id INT AUTO_INCREMENT PRIMARY KEY,
-		user_id INT NOT NULL,
-		asset_name VARCHAR(50) NOT NULL,
-		symbol VARCHAR(20) NOT NULL,
-		quantity DECIMAL(36,18) NOT NULL DEFAULT 0,
-		on_order_quantity DECIMAL(36,18) NOT NULL DEFAULT 0,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		INDEX idx_user_id (user_id),
-		INDEX idx_symbol (symbol),
-		UNIQUE KEY unique_user_asset (user_id, symbol)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
-
-	// 市场价格表
-	priceQuery := `CREATE TABLE IF NOT EXISTS asset_prices (
-		id INT AUTO_INCREMENT PRIMARY KEY,
-		symbol VARCHAR(20) NOT NULL,
-		price DECIMAL(36,18) NOT NULL,
-		change_24h DECIMAL(10,2) NOT NULL,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		UNIQUE KEY unique_symbol (symbol)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
-
-	// 用户设置表
-	settingsQuery := `CREATE TABLE IF NOT EXISTS user_settings (
-		user_id INT PRIMARY KEY,
-		username VARCHAR(50) NOT NULL,
-		email VARCHAR(100) NOT NULL,
-		account_level VARCHAR(20) DEFAULT 'standard',
-		join_date DATE NOT NULL,
-		FOREIGN KEY (user_id) REFERENCES users(id)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
-
-	// 执行创建表操作
-	if _, err := db.Exec(assetQuery); err != nil {
-		return fmt.Errorf("创建用户资产表失败: %w", err)
-	}
-
-	if _, err := db.Exec(priceQuery); err != nil {
-		return fmt.Errorf("创建资产价格表失败: %w", err)
-	}
-
-	if _, err := db.Exec(settingsQuery); err != nil {
-		return fmt.Errorf("创建用户设置表失败: %w", err)
-	}
-
+	fmt.Println("db conncetion succ")
 	return nil
 }
 
@@ -146,7 +61,7 @@ func getUserByEmail(email string) (User, error) {
 		email).Scan(&user.ID, &user.Username, &user.Password, &user.Email, &user.AccountLevel)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return User{}, fmt.Errorf("邮箱未注册")
+			return User{}, fmt.Errorf("email not registered")
 		}
 		return User{}, err
 	}
@@ -215,7 +130,7 @@ func GetUserSettingsFromDB(userID string) (UserSettings, error) {
 // GetUserTotalBalance 计算用户所有资产的总价值
 func GetUserTotalBalance(userID string) (float64, error) {
 	var totalBalance float64
-// todo ：多个历史模拟交易（需要做）
+	// todo ：多个历史模拟交易（需要做）
 	query := `
 		SELECT SUM(ua.quantity * ap.price) + SUM(ua.on_order_quantity * ap.price) as total_balance
 		FROM user_assets ua
@@ -254,7 +169,7 @@ func GetUserWalletAssets(userID string) (WalletInfo, error) {
 	}
 	walletInfo.Balance = balance
 
-	// 查询用户资产列表  【表结构待确认】
+	// TODO: 查询用户资产列表  【表结构待确认】
 	query := `
 		SELECT ua.asset_name, 
 		       ua.symbol, 
@@ -312,11 +227,6 @@ func GetUserWalletAssets(userID string) (WalletInfo, error) {
 
 // 初始化钱包测试数据
 func initWalletTestData() error {
-	// 先检查表是否已创建
-	if err := createWalletTables(); err != nil {
-		return err
-	}
-
 	// 添加测试用户设置
 	userSettingsQuery := `
 		INSERT IGNORE INTO user_settings (user_id, username, email, account_level, join_date)

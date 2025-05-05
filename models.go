@@ -28,8 +28,3 @@ type ApiResponse struct {
 	Data       map[string]interface{} `json:"data,omitempty"`
 	StatusInfo *StatusInfo            `json:"statusInfo,omitempty"`
 }
-
-type StatusInfo struct {
-	Message string                 `json:"message"`
-	Detail  map[string]interface{} `json:"detail"`
-}
